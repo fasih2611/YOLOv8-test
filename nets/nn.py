@@ -1,8 +1,91 @@
 import math
-
+import torch.nn as nn
 import torch
-
 from utils.util import make_anchors
+
+class QuantizableConv(nn.Module):
+    def __init__(self, in_ch, out_ch, k=1, s=1, p=None, d=1, g=1):
+        super().__init__()
+        self.conv = nn.Conv2d(in_ch, out_ch, k, s, pad(k, p, d), d, g, False)
+        self.bn = nn.BatchNorm2d(out_ch, 0.001, 0.03)
+        self.relu = nn.SiLU(inplace=True)
+
+    def forward(self, x):
+        return self.relu(self.bn(self.conv(x)))
+
+    def fuse_forward(self, x):
+        return self.relu(self.conv(x))
+
+class QuantizableYOLO(nn.Module):
+    def __init__(self, width, depth, num_classes):
+        super().__init__()
+        self.net = DarkNet(width, depth)
+        self.fpn = DarkFPN(width, depth)
+
+        img_dummy = torch.zeros(1, 3, 256, 256)
+        self.head = Head(num_classes, (width[3], width[4], width[5]))
+        self.head.stride = torch.tensor([256 / x.shape[-2] for x in self.forward(img_dummy)])
+        self.stride = self.head.stride
+        self.head.initialize_biases()
+
+        # Quantization-specific attributes
+        self.quant = torch.quantization.QuantStub()
+        self.dequant = torch.quantization.DeQuantStub()
+
+    def forward(self, x):
+        x = self.quant(x)
+        x = self.net(x)
+        x = self.fpn(x)
+        x = self.head(list(x))
+        x = self.dequant(x)
+        return x
+
+    def fuse_model(self):
+        for m in self.modules():
+            if type(m) is QuantizableConv:
+                torch.quantization.fuse_modules(m, ['conv', 'bn', 'relu'], inplace=True)
+
+def create_quantized_yolo(width, depth, num_classes):
+    model = QuantizableYOLO(width, depth, num_classes)
+    model.eval()
+    model.fuse_model()
+    
+    # Specify quantization configuration
+    model.qconfig = torch.quantization.get_default_qconfig('x86')
+    
+    # Prepare model for quantization
+    torch.quantization.prepare(model, inplace=True)
+    
+    # Calibrate the model (you would need to run sample data through the model here)
+    # For example:
+    # with torch.no_grad():
+    #     for calibration_data in calibration_dataloader:
+    #         model(calibration_data)
+    
+    # Convert to quantized model
+    torch.quantization.convert(model, inplace=True)
+    
+    return model
+
+def quantized_yolo_v8_n(num_classes: int = 80):
+    depth = [1, 2, 2]
+    width = [3, 16, 32, 64, 128, 256]
+    return create_quantized_yolo(width, depth, num_classes)
+
+def quantized_yolo_v8_s(num_classes: int = 80):
+    depth = [1, 2, 2]
+    width = [3, 32, 64, 128, 256, 512]
+    return create_quantized_yolo(width, depth, num_classes)
+
+def quantized_yolo_v8_m(num_classes: int = 80):
+    depth = [2, 4, 4]
+    width = [3, 48, 96, 192, 384, 576]
+    return create_quantized_yolo(width, depth, num_classes)
+
+def quantized_yolo_v8_l(num_classes: int = 80):
+    depth = [3, 6, 6]
+    width = [3, 64, 128, 256, 512, 512]
+    return create_quantized_yolo(width, depth, num_classes)
 
 
 def pad(k, p=None, d=1):
