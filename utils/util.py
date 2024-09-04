@@ -69,8 +69,12 @@ def make_anchors(x, strides, offset=0.5):
     """
     assert x is not None
     anchor_points, stride_tensor = [], []
+    #for tracer
+    sizes = [80,40,20]
     for i, stride in enumerate(strides):
         _, _, h, w = x[i].shape
+        if not isinstance(h, int): #for the tracer
+            h, w= sizes[i], sizes[i]
         sx = torch.arange(end=w, dtype=x[i].dtype, device=x[i].device) + offset  # shift x
         sy = torch.arange(end=h, dtype=x[i].dtype, device=x[i].device) + offset  # shift y
         sy, sx = torch.meshgrid(sy, sx)
