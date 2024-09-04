@@ -7,7 +7,7 @@ import numpy
 import torch
 import torchvision
 from torch.nn.functional import cross_entropy, one_hot
-
+from torch.fx import wrap
 
 def setup_seed():
     """
@@ -62,7 +62,7 @@ def scale(coords, shape1, shape2, ratio_pad=None):
     coords[:, 3].clamp_(0, shape2[0])  # y2
     return coords
 
-
+@wrap
 def make_anchors(x, strides, offset=0.5):
     """
     Generate anchors from features
