@@ -71,10 +71,6 @@ def make_anchors(x, strides, offset=0.5):
     anchor_points, stride_tensor = [], []
     for i, stride in enumerate(strides):
         _, _, h, w = x[i].shape
-        if isinstance(x, torch.fx.Proxy):
-            h = h.node.meta['tensor_meta'].value
-            w = w.node.meta['tensor_meta'].value
-        print(h,w)
         sx = torch.arange(end=w, dtype=x[i].dtype, device=x[i].device) + offset  # shift x
         sy = torch.arange(end=h, dtype=x[i].dtype, device=x[i].device) + offset  # shift y
         sy, sx = torch.meshgrid(sy, sx)
