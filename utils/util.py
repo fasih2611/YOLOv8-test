@@ -116,7 +116,7 @@ def wh2xy(x):
     return y
 
 
-def non_max_suppression(prediction, conf_threshold=0.25, iou_threshold=0.45):
+def non_max_suppression(prediction, conf_threshold=0.25, iou_threshold=0.45,classes=80):
     nc = prediction.shape[1] - 4  # number of classes
     xc = prediction[:, 4:4 + nc].amax(1) > conf_threshold  # candidates
 
